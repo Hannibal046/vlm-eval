@@ -149,3 +149,8 @@ dmypy.json
 __scratch/
 scratch/
 cache/
+
+datasets
+download
+results
+draft.*

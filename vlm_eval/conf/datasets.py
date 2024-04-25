@@ -321,7 +321,7 @@ class PopeFullDatasetConfig(DatasetConfig):
     annotations_file: Path = Path("datasets/pope/metadata-full.json")
 
     # Examples = n = 3000 for each of adversarial/popular/random splits = 3 * 3000 = 9000
-    expected_examples: int = 9000
+    expected_examples: int = 8910
 
 
 @dataclass

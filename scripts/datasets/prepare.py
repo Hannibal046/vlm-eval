@@ -41,7 +41,8 @@ class DatasetPreparationConfig:
     # Path Parameters
     root_dir: Path = Path(                                      # Path to root directory for storing datasets
         # "datasets/vlm-evaluation"
-        "/mnt/fsx/skaramcheti/datasets/vlm-evaluation"
+        # "/mnt/fsx/skaramcheti/datasets/vlm-evaluation"
+        "."
     )
 
     # HF Hub Credentials (for LLaMa-2)
