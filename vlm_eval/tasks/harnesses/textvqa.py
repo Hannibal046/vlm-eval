@@ -164,18 +164,21 @@ class TextVQAMapDataset(Dataset):
         ex = self.examples[idx]
         qprompt_ocr = self.prompt_fn(ex["question"])
         qprompt_no_ocr = self.prompt_fn(ex["question"].split("\nReference OCR token:")[0])
+        image_path = self.root_dir / ex['img_path']
+        # image = Image.open(self.root_dir / ex["img_path"]).convert("RGB")
 
-        if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
-            # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
-            pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
 
-        else:
-            # Assume `image_transform` is an HF ImageProcessor...
-            pixel_values = self.image_processor(
-                Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
-            )["pixel_values"][0]
+        # if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
+        #     # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
+        #     pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
 
-        return ex["question_id"], qprompt_ocr, qprompt_no_ocr, pixel_values, ex["question"], " or ".join(ex["answers"])
+        # else:
+        #     # Assume `image_transform` is an HF ImageProcessor...
+        #     pixel_values = self.image_processor(
+        #         Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
+        #     )["pixel_values"][0]
+        # print(ex["question_id"], qprompt_ocr, qprompt_no_ocr, image_path, ex["question"], " or ".join(ex["answers"]))
+        return ex["question_id"], qprompt_ocr, qprompt_no_ocr, str(image_path), ex["question"], " or ".join(ex["answers"])
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -212,6 +215,7 @@ class TextVQATaskRunner:
 
         # Build (Map/Iterable) Dataset, using Model-Specific Prompt & Image Processor
         overwatch.info(f"Assembling Text VQA Map-Style Dataset from {self.root_dir / self.index_file}", ctx_level=1)
+        # self.dataset = TextVQAMapDataset(self.root_dir, self.index_file, self.prompt_fn, self.image_processor)
         self.dataset = TextVQAMapDataset(self.root_dir, self.index_file, self.prompt_fn, self.image_processor)
 
     def evaluate(self, vlm: VLM, device_batch_size: int, num_workers: int) -> None:
@@ -229,20 +233,20 @@ class TextVQATaskRunner:
         result_qa_pairs = {}
         try:
             overwatch.info(f"Distributing Evaluation across {self.distributed_state.num_processes} GPUs", ctx_level=1)
-            for question_ids, qprompts_ocr, qprompts_no_ocr, pixel_values, questions, answers in tqdm(
+            for question_ids, qprompts_ocr, qprompts_no_ocr, image_path, questions, answers in tqdm(
                 dataloader,
                 desc="=>> Evaluating",
                 disable=not self.distributed_state.is_main_process,
             ):
-                if isinstance(pixel_values, torch.Tensor):
-                    pixel_values = pixel_values.to(self.distributed_state.device)
-                elif isinstance(pixel_values, dict):
-                    pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
-                else:
-                    raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
-
-                gen_answers_ocr = vlm.generate_answer(pixel_values, qprompts_ocr)
-                gen_answers_no_ocr = vlm.generate_answer(pixel_values, qprompts_no_ocr)
+                # if isinstance(pixel_values, torch.Tensor):
+                #     pixel_values = pixel_values.to(self.distributed_state.device)
+                # elif isinstance(pixel_values, dict):
+                #     pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
+                # else:
+                #     raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
+                # print(image_path)
+                gen_answers_ocr = vlm.generate_answer(image_path, qprompts_ocr)
+                gen_answers_no_ocr = vlm.generate_answer(image_path, qprompts_no_ocr)
 
                 for question_id, gen_answer_ocr, gen_answer_no_ocr, question, answer in zip(
                     question_ids, gen_answers_ocr, gen_answers_no_ocr, questions, answers, strict=True

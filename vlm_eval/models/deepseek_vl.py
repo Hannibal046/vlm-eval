@@ -6,17 +6,17 @@ likelihood estimation. Only supports the Vicuna LLM backbones (no FLAN-T5).
 """
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Union
-import time
 import torch
 import torch.nn as nn
 from accelerate import PartialState
-from deepseek_vl.models import VLChatProcessor
-from deepseek_vl.models.processing_vlm import VLChatProcessorOutput
-from transformers import AutoModelForCausalLM
-
 from vlm_eval.util.interfaces import VLM, ImageProcessor, Tokenizer
 
-# Define InstructBLIP Mapping from Model ID --> HF Hub Path
+## Model-specific Import
+from deepseek_vl.models import VLChatProcessor
+from deepseek_vl.models.processing_vlm import VLChatProcessorOutput
+from deepseek_vl.utils.io import load_pil_images
+from transformers import AutoModelForCausalLM
+
 DEEPSEEKVL_MODELS = [
     "deepseek-ai/deepseek-vl-7b-chat",
     "deepseek-ai/deepseek-vl-1.3b-chat",
@@ -87,7 +87,7 @@ class DeepSeekVL(VLM):
         true_false_prompt_fn = self.get_true_false_chat_prompt_fn()
         contrast_caption_prompt_fn = self.get_contrast_caption_chat_prompt_fn()
         bbox_refer_prompt_fn = self.get_bbox_refer_chat_prompt_fn()
-        text_vqa_prompt_fn = self.get_vqa_chat_prompt_fn(uncertainty_aware=False, ocr_handling=True)
+        text_vqa_prompt_fn = self.get_vqa_chat_prompt_fn(uncertainty_aware=False)
         captioning_prompt_fn = self.get_captioning_prompt_fn()
 
         return {
@@ -108,7 +108,10 @@ class DeepSeekVL(VLM):
 
     @staticmethod
     def get_captioning_prompt_fn() -> Callable[[str], str]:
-        """Generates the full reference prompt for captioning tasks."""
+        """
+        Generates the full reference prompt for captioning tasks.
+        Same as LLaVA
+        """
 
         def captioning_prompt_fn() -> str:
             return "A short image description:"
@@ -116,11 +119,15 @@ class DeepSeekVL(VLM):
         return captioning_prompt_fn
 
     @staticmethod
-    def get_vqa_chat_prompt_fn(uncertainty_aware: bool = False, ocr_handling: bool = False) -> Callable[[str], str]:
+    def get_vqa_chat_prompt_fn(uncertainty_aware: bool = False) -> Callable[[str], str]:
         """Generates the full reference prompt for VQA tasks."""
 
         def vqa_prompt_fn(question: str) -> str:
-           return f"{DEFAULT_IMAGE_TOKEN}{question}\nAnswer the question using a single word or phrase."
+           prompt =  f"{DEFAULT_IMAGE_TOKEN}{question}"
+           if uncertainty_aware:
+               prompt += "\nWhen the provided information is insufficient, respond with 'Unanswerable'."
+           prompt += "\nAnswer the question using a single word or phrase."
+           return prompt
 
         return vqa_prompt_fn
 
@@ -129,7 +136,9 @@ class DeepSeekVL(VLM):
         """Generates the full reference prompt for a True/False captioning task."""
 
         def true_false_prompt_fn(caption: str) -> str:
-            return f'Based on the image, is this statement true or false? "{caption}" Answer:'
+            cap_prompt = f'{DEFAULT_IMAGE_TOKEN}\nBased on the image, is this statement "True" or "False"? {caption}'
+            cap_prompt += '\nRespond with "True" or "False" directly.'
+            return cap_prompt
 
         return true_false_prompt_fn
 
@@ -138,7 +147,7 @@ class DeepSeekVL(VLM):
         """Generates the full reference prompt for a multi-pair contrast captioning task (e.g., WinoGround)."""
 
         def contrast_caption_prompt_fn(caption: str) -> str:
-            return f'Does the following caption match the image (true or false)? Caption: "{caption}" Answer:'
+            return f'{DEFAULT_IMAGE_TOKEN}Does the following caption match the image (true or false)? Caption: "{caption}" Answer:'
 
         return contrast_caption_prompt_fn
 
@@ -147,11 +156,11 @@ class DeepSeekVL(VLM):
         """Generates the full reference prompt for a referring expression localization task."""
 
         def bbox_refer_prompt_fn(sentence: str) -> str:
-            return f'Please provide the bounding box coordinate of the region this sentence describes: "{sentence}":'
+            return f'{DEFAULT_IMAGE_TOKEN}Please provide the bounding box coordinate of the region this sentence describes: "{sentence}":'
 
         return bbox_refer_prompt_fn
 
-    def deepseek_vl_prepare(self,question:str,pixel_values: torch.Tensor):
+    def deepseek_vl_prepare(self,question:str,image: Path):
         ## single batch inference
         conversation = [
             {"role": "User","content": question,},
@@ -181,13 +190,27 @@ class DeepSeekVL(VLM):
 
     @torch.inference_mode()
     def generate_answer(
-        self, pixel_values: torch.Tensor, questions: List[str], return_string_probabilities: Optional[List[str]] = None
+        self, image_path: List[Path], questions: List[str], return_string_probabilities: Optional[List[str]] = None
     ) -> Union[List[str], List[List[float]]]:
         gen_texts = []
         with torch.cuda.amp.autocast(dtype=self.dtype):
-            for idx,question in enumerate(questions):
-                prepare_inputs = self.deepseek_vl_prepare(question,pixel_values[idx]).to(pixel_values.device)
+            for image,question in zip(image_path,questions):
+                conversation = [
+                    {
+                        "role": "User",
+                        "content": question,
+                        "images": [image],
+                    },
+                    {"role": "Assistant", "content": ""},
+                ]
+                pil_images = load_pil_images(conversation)
+                prepare_inputs = self.text_img_processor(
+                    conversations=conversation,
+                    images=pil_images,
+                    force_batchify=True
+                ).to(self.distributed_state.device)
                 inputs_embeds = self.model.prepare_inputs_embeds(**prepare_inputs)
+                
                 outputs = self.model.language_model.generate(
                     inputs_embeds=inputs_embeds,
                     attention_mask=prepare_inputs.attention_mask,
