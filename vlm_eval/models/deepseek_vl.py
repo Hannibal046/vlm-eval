@@ -55,7 +55,7 @@ class DeepSeekVL(VLM):
 
         # For computing likelihoods --> get tokens corresponding to "true", "false" and "yes", "no"
         self.string2idx = {}
-        for trigger_string in ["true", "false", "yes", "no"]:
+        for trigger_string in ["True", "False", "Yes", "No"] + [chr(ord("A") + i) for i in range(26)]:
             token_idx_list = self.text_img_processor.tokenizer.encode(trigger_string, add_special_tokens=False)
             assert len(token_idx_list) == 1, f'String "{trigger_string}" is tokenized as more than one token!'
             self.string2idx[trigger_string] = token_idx_list[0]
@@ -89,6 +89,8 @@ class DeepSeekVL(VLM):
         bbox_refer_prompt_fn = self.get_bbox_refer_chat_prompt_fn()
         text_vqa_prompt_fn = self.get_vqa_chat_prompt_fn(uncertainty_aware=False)
         captioning_prompt_fn = self.get_captioning_prompt_fn()
+        tally_qa_prompt_fn = self.get_mc_prompt_fn()
+        ai2d_prompt_fn = self.get_mc_prompt_fn()
 
         return {
             "vqa-v2": vqa_prompt_fn,
@@ -99,6 +101,8 @@ class DeepSeekVL(VLM):
             "pope": vqa_prompt_fn,
             "refcoco": bbox_refer_prompt_fn,
             "ocid-ref": bbox_refer_prompt_fn,
+            "tally-qa": tally_qa_prompt_fn,
+            "ai2d": ai2d_prompt_fn,
             # Generic for GUI
             "captioning": captioning_prompt_fn,
             "bbox_pred": bbox_refer_prompt_fn,
@@ -117,7 +121,18 @@ class DeepSeekVL(VLM):
             return "A short image description:"
 
         return captioning_prompt_fn
+    
+    def get_mc_prompt_fn(self) -> Callable[[str], str]:
+        """Generates the full reference prompt for a multiple-choice question-answer task."""
+        def mc_prompt_fn(question: str, choices: List[str]) -> str:
+            assert len(choices) <= 26, "Too many answer choices vs. possible letters in the alphabet!"
+            choice_str = "\n".join([f"{chr(ord('A') + idx)}. {choice}" for idx, choice in enumerate(choices)])
+            q_prompt = DEFAULT_IMAGE_TOKEN + "\n" + f"{question}\n{choice_str}"
+            q_prompt += "\nAnswer with the option's letter from the given choices directly."
+            return q_prompt
 
+        return mc_prompt_fn
+    
     @staticmethod
     def get_vqa_chat_prompt_fn(uncertainty_aware: bool = False) -> Callable[[str], str]:
         """Generates the full reference prompt for VQA tasks."""
@@ -160,39 +175,12 @@ class DeepSeekVL(VLM):
 
         return bbox_refer_prompt_fn
 
-    def deepseek_vl_prepare(self,question:str,image: Path):
-        ## single batch inference
-        conversation = [
-            {"role": "User","content": question,},
-            {"role": "Assistant", "content": ""},
-        ]
-        sft_format = self.text_img_processor.apply_sft_template_for_multi_turn_prompts(
-            conversations=conversation,
-            sft_format=self.text_img_processor.sft_format,
-            system_prompt=self.text_img_processor.system_prompt,
-        )
-        input_ids = self.text_img_processor.tokenizer.encode(sft_format)
-        input_ids = torch.LongTensor(input_ids)
-        image_token_mask: torch.BoolTensor = input_ids == self.text_img_processor.image_id
-        image_indices = image_token_mask.nonzero()
-        input_ids, num_image_tokens = self.text_img_processor.add_image_token(
-            image_indices=image_indices,
-            input_ids=input_ids,
-        )
-        prepare = VLChatProcessorOutput(
-            sft_format=sft_format,
-            input_ids=input_ids,
-            pixel_values=pixel_values[None,...],
-            num_image_tokens=num_image_tokens,
-        )
-        prepare = self.text_img_processor.batchify([prepare])
-        return prepare
-
     @torch.inference_mode()
     def generate_answer(
         self, image_path: List[Path], questions: List[str], return_string_probabilities: Optional[List[str]] = None
     ) -> Union[List[str], List[List[float]]]:
         gen_texts = []
+        gen_probabilities = []
         with torch.cuda.amp.autocast(dtype=self.dtype):
             for image,question in zip(image_path,questions):
                 conversation = [
@@ -210,16 +198,37 @@ class DeepSeekVL(VLM):
                     force_batchify=True
                 ).to(self.distributed_state.device)
                 inputs_embeds = self.model.prepare_inputs_embeds(**prepare_inputs)
-                
-                outputs = self.model.language_model.generate(
-                    inputs_embeds=inputs_embeds,
-                    attention_mask=prepare_inputs.attention_mask,
-                    pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
-                    bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
-                    eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
-                    use_cache=True,
-                    **self.generate_kwargs,
-                )
-                answer = self.text_img_processor.tokenizer.decode(outputs[0].cpu().tolist(), skip_special_tokens=True)
-                gen_texts.append(answer)
-        return gen_texts
+                if return_string_probabilities is None:
+                    outputs = self.model.language_model.generate(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=prepare_inputs.attention_mask,
+                        pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
+                        eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        use_cache=True,
+                        **self.generate_kwargs,
+                    )
+                    answer = self.text_img_processor.tokenizer.decode(outputs[0].cpu().tolist(), skip_special_tokens=True)
+                    gen_texts.append(answer)
+                else:
+                    full_out_dict = self.model.language_model.generate(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=prepare_inputs.attention_mask,
+                        pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
+                        eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        use_cache=True,
+                        **self.generate_kwargs,
+                        output_scores=True,
+                        return_dict_in_generate=True,
+                    )
+                    gen_ids = full_out_dict.sequences[0, 0 :]
+                    gen_texts.append(self.text_img_processor.tokenizer.decode(gen_ids, skip_special_tokens=True).strip())
+                    token_probs = torch.softmax(full_out_dict.scores[0][0], dim=0)
+                    slice_idxs = torch.tensor([self.string2idx[s] for s in return_string_probabilities])
+                    string_probs_unnormalized = token_probs[slice_idxs]
+                    string_probs = string_probs_unnormalized / string_probs_unnormalized.sum()
+                    gen_probabilities.append(string_probs.cpu().numpy().tolist())
+
+
+        return gen_texts if return_string_probabilities is None else gen_probabilities

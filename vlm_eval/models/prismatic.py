@@ -11,6 +11,7 @@ import torch
 import torch.nn as nn
 from accelerate import PartialState
 from PIL.Image import Image
+import PIL
 from prismatic import load
 
 from vlm_eval.util.interfaces import VLM, ImageProcessor, Tokenizer
@@ -217,10 +218,20 @@ class PrismaticVLM(VLM):
     @torch.inference_mode()
     def generate_answer(
         self,
-        pixel_values: torch.Tensor,
+        image_paths: List[str],
         question_prompts: List[str],
         return_string_probabilities: Optional[List[str]] = None,
     ) -> Union[List[str], Tuple[List[str], List[List[float]]]]:
+        _pixel_values = [
+                self.image_processor(PIL.Image.open(image_path).convert("RGB")) 
+                for image_path in image_paths
+            ]
+        pixel_values = {}
+        for key in _pixel_values[0].keys():
+            pixel_values[key] = torch.stack(
+                [list_item[key] for list_item in _pixel_values]
+            )
+        pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
         return self.model.generate_batch(
             pixel_values, question_prompts, return_string_probabilities, **self.generate_kwargs
         )

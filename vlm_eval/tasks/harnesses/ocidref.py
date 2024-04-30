@@ -192,16 +192,16 @@ class OCIDRefMapDataset(Dataset):
         ex = self.examples[idx]
         ref_expr_prompt = self.prompt_fn(ex["ref_expression"])
 
-        if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
-            # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
-            pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
-        else:
-            # Assume `image_transform` is an HF ImageProcessor...
-            pixel_values = self.image_processor(
-                Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
-            )["pixel_values"][0]
+        # if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
+        #     # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
+        #     pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
+        # else:
+        #     # Assume `image_transform` is an HF ImageProcessor...
+        #     pixel_values = self.image_processor(
+        #         Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
+        #     )["pixel_values"][0]
 
-        return ex["example_id"], ref_expr_prompt, pixel_values, ex["ref_expression"], np.asarray(ex["bbox"])
+        return ex["example_id"], ref_expr_prompt, str(self.root_dir / ex["img_path"]), ex["ref_expression"], np.asarray(ex["bbox"])
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -252,19 +252,19 @@ class OCIDRefTaskRunner:
         result_sent_bbox_pairs = {}
         try:
             overwatch.info(f"Distributing Evaluation across {self.distributed_state.num_processes} GPUs", ctx_level=1)
-            for example_ids, ref_exp_prompts, pixel_values, ref_exps, bboxes in tqdm(
+            for example_ids, ref_exp_prompts, image_paths, ref_exps, bboxes in tqdm(
                 dataloader,
                 desc="=>> Evaluating",
                 disable=not self.distributed_state.is_main_process,
             ):
-                if isinstance(pixel_values, torch.Tensor):
-                    pixel_values = pixel_values.to(self.distributed_state.device)
-                elif isinstance(pixel_values, dict):
-                    pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
-                else:
-                    raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
+                # if isinstance(pixel_values, torch.Tensor):
+                #     pixel_values = pixel_values.to(self.distributed_state.device)
+                # elif isinstance(pixel_values, dict):
+                #     pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
+                # else:
+                #     raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
 
-                gen_bboxes = vlm.generate_answer(pixel_values, ref_exp_prompts)
+                gen_bboxes = vlm.generate_answer(image_paths, ref_exp_prompts)
                 for example_id, gen_bbox, ref_exp, bbox_gt in zip(
                     example_ids, gen_bboxes, ref_exps, bboxes, strict=True
                 ):

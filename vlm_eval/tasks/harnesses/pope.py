@@ -167,19 +167,19 @@ class PopeMapDataset(Dataset):
         ex = self.examples[idx]
         question_prompt = self.prompt_fn(ex["question"])
 
-        if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
-            # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
-            pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
-        else:
-            # Assume `image_transform` is a HF ImageProcessor...
-            pixel_values = self.image_processor(
-                Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
-            )["pixel_values"][0]
+        # if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
+        #     # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
+        #     pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
+        # else:
+        #     # Assume `image_transform` is a HF ImageProcessor...
+        #     pixel_values = self.image_processor(
+        #         Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
+        #     )["pixel_values"][0]
 
         return (
             ex["question_id"],
             question_prompt,
-            pixel_values,
+            str(self.root_dir / ex["img_path"]),
             ex["question"],
             ex["answer"],
         )
@@ -233,21 +233,21 @@ class PopeTaskRunner:
         result_qa_pairs = {}
         try:
             overwatch.info(f"Distributing Evaluation across {self.distributed_state.num_processes} GPUs", ctx_level=1)
-            for question_ids, question_prompts, pixel_values, questions, answers in tqdm(
+            for question_ids, question_prompts, image_paths, questions, answers in tqdm(
                 dataloader,
                 desc="=>> Evaluating",
                 disable=not self.distributed_state.is_main_process,
             ):
-                if isinstance(pixel_values, torch.Tensor):
-                    pixel_values = pixel_values.to(self.distributed_state.device)
-                elif isinstance(pixel_values, dict):
-                    pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
-                else:
-                    raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
+                # if isinstance(pixel_values, torch.Tensor):
+                #     pixel_values = pixel_values.to(self.distributed_state.device)
+                # elif isinstance(pixel_values, dict):
+                #     pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
+                # else:
+                #     raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
 
                 # Note =>> `gen_probabilities` returns the normalized probabilities of ["Yes", "No"] from LM
                 gen_probabilities = vlm.generate_answer(
-                    pixel_values, question_prompts, return_string_probabilities=["Yes", "No"]
+                    image_paths, question_prompts, return_string_probabilities=["Yes", "No"]
                 )
 
                 for question_id, gen_probs, question, answer in zip(

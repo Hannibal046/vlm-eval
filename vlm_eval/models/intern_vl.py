@@ -135,7 +135,7 @@ class InternVL(VLM):
         self.distributed_state = PartialState()
 
         # Load Model on GPU(s) --> download if necessary via HF Hub
-        self.model, self.tokenizer,self.image_processor = self.load()
+        self.model, self.tokenizer = self.load()
 
         # For Fair Evaluation against LLaVa/Quartz/IDEFICS --> greedy decoding:
         self.max_length = max_length
@@ -161,15 +161,12 @@ class InternVL(VLM):
                 trust_remote_code=True
                 )
             tokenizer = AutoTokenizer.from_pretrained(self.hub_path,trust_remote_code=True)
-        
-        def process_image(image,**kwargs):
-            return {'pixel_values':[load_image(image,max_num=6)]}
 
         # Place Model on Device
         model = model.to(self.distributed_state.device, dtype=self.dtype)
         model.eval()
 
-        return model, tokenizer, process_image
+        return model, tokenizer
 
     def set_generate_kwargs(self, generate_kwargs):
         self.generate_kwargs = generate_kwargs
@@ -246,17 +243,18 @@ class InternVL(VLM):
 
     @torch.inference_mode()
     def generate_answer(
-        self, pixel_values: torch.Tensor, questions: List[str], return_string_probabilities: Optional[List[str]] = None
+        self, image_paths: torch.Tensor, questions: List[str], return_string_probabilities: Optional[List[str]] = None
     ) -> Union[List[str], List[List[float]]]:
         gen_texts = []
-        with torch.cuda.amp.autocast(dtype=self.dtype):
-            for idx,question in enumerate(questions):
+        for image_path,question in zip(image_paths,questions):
+            pixel_values = load_image(image_path, max_num=6).to(torch.bfloat16).to(self.distributed_state.device)
+            with torch.cuda.amp.autocast(dtype=self.dtype):       
                 ## print is hard coded in the `chat` function
                 ## https://huggingface.co/OpenGVLab/InternVL-Chat-V1-5/blob/main/modeling_internvl_chat.py
                 answer,_ = suppress_print(
                     self.model.chat,
                     self.tokenizer,
-                    pixel_values[idx],
+                    pixel_values,
                     question,
                     generation_config = self.generate_kwargs,
                 )

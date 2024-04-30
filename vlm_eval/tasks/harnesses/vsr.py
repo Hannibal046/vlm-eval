@@ -138,16 +138,16 @@ class VSRMapDataset(Dataset):
         ex = self.examples[idx]
         caption_prompt = self.prompt_fn(ex["caption"])
 
-        if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
-            # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
-            pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
-        else:
-            # Assume `image_transform` is an HF ImageProcessor...
-            pixel_values = self.image_processor(
-                Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
-            )["pixel_values"][0]
+        # if isinstance(self.image_processor, Compose) or hasattr(self.image_processor, "is_prismatic"):
+        #     # This is a standard `torchvision.transforms` object or custom PrismaticVLM wrapper
+        #     pixel_values = self.image_processor(Image.open(self.root_dir / ex["img_path"]).convert("RGB"))
+        # else:
+        #     # Assume `image_transform` is an HF ImageProcessor...
+        #     pixel_values = self.image_processor(
+        #         Image.open(self.root_dir / ex["img_path"]).convert("RGB"), return_tensors="pt"
+        #     )["pixel_values"][0]
 
-        return ex["example_id"], caption_prompt, pixel_values, ex["caption"], ex["true_false"]
+        return ex["example_id"], caption_prompt, str(self.root_dir / ex["img_path"]), ex["caption"], ex["true_false"]
 
     def __len__(self) -> int:
         return len(self.examples)
@@ -198,21 +198,21 @@ class VSRTaskRunner:
         result_qa_pairs = {}
         try:
             overwatch.info(f"Distributing Evaluation across {self.distributed_state.num_processes} GPUs", ctx_level=1)
-            for example_ids, caption_prompts, pixel_values, captions, true_false_answers in tqdm(
+            for example_ids, caption_prompts, image_paths, captions, true_false_answers in tqdm(
                 dataloader,
                 desc="=>> Evaluating",
                 disable=not self.distributed_state.is_main_process,
             ):
-                if isinstance(pixel_values, torch.Tensor):
-                    pixel_values = pixel_values.to(self.distributed_state.device)
-                elif isinstance(pixel_values, dict):
-                    pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
-                else:
-                    raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
+                # if isinstance(pixel_values, torch.Tensor):
+                #     pixel_values = pixel_values.to(self.distributed_state.device)
+                # elif isinstance(pixel_values, dict):
+                #     pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
+                # else:
+                #     raise ValueError(f"Unexpected `pixel_values` type = {type(pixel_values)}")
 
                 # Note =>> `gen_probabilities` returns the normalized probabilities of ["True", "False"] from LM
                 gen_probabilities = vlm.generate_answer(
-                    pixel_values, caption_prompts, return_string_probabilities=["True", "False"]
+                    image_paths, caption_prompts, return_string_probabilities=["True", "False"]
                 )
 
                 for example_id, gen_probs, caption, true_false_answer in zip(

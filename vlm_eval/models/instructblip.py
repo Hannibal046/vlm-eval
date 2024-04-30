@@ -11,7 +11,7 @@ import torch
 import torch.nn as nn
 from accelerate import PartialState
 from transformers import InstructBlipForConditionalGeneration, InstructBlipProcessor
-
+import PIL
 from vlm_eval.util.interfaces import VLM, ImageProcessor, Tokenizer
 
 # Define InstructBLIP Mapping from Model ID --> HF Hub Path
@@ -165,9 +165,17 @@ class InstructBLIP(VLM):
 
     @torch.inference_mode()
     def generate_answer(
-        self, pixel_values: torch.Tensor, questions: List[str], return_string_probabilities: Optional[List[str]] = None
+        self, image_paths: List[str], questions: List[str], return_string_probabilities: Optional[List[str]] = None
     ) -> Union[List[str], List[List[float]]]:
         with torch.cuda.amp.autocast(dtype=torch.float32):
+            pixel_values = torch.stack(
+                [
+                    self.image_processor(PIL.Image.open(image_path).convert("RGB"), return_tensors="pt")["pixel_values"][0] 
+                    for image_path in image_paths
+                ],
+                dim=0
+            )
+            pixel_values = pixel_values.to(self.distributed_state.device)
             batch_input_ids = [
                 self.text_img_processor(text=q, return_tensors="pt").to(pixel_values.device) for q in questions
             ]

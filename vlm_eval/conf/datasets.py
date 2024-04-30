@@ -40,7 +40,7 @@ class VQAv2FullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 214354
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/vqa-v2/metadata.json")
     annotations_file: Path = Path("datasets/vqa-v2/annotations-vqa-v2-full.json")
     questions_file: Path = Path("datasets/vqa-v2/questions-vqa-v2-full.json")
@@ -53,7 +53,7 @@ class VQAv2SubSampledDatasetConfig(DatasetConfig):
     split: str = "val"
 
     expected_examples: int = 16384
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/vqa-v2/metadata-slim-16384.json")
     annotations_file: Path = Path("datasets/vqa-v2/annotations-vqa-v2-slim-16384.json")
     questions_file: Path = Path("datasets/vqa-v2/questions-vqa-v2-slim-16384.json")
@@ -67,7 +67,7 @@ class VQAv2SlimDatasetConfig(DatasetConfig):
 
     expected_examples: int = 1024
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/vqa-v2/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/vqa-v2/annotations-vqa-v2-slim-1024.json")
     questions_file: Path = Path("datasets/vqa-v2/questions-vqa-v2-slim-1024.json")
@@ -82,7 +82,7 @@ class GQAFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 12578
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/gqa/metadata-full.json")
     annotations_file: Path = Path("datasets/gqa/annotations-gqa-full.json")
 
@@ -95,7 +95,7 @@ class GQASlimDatasetConfig(DatasetConfig):
 
     expected_examples: int = 1024
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/gqa/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/gqa/annotations-gqa-slim-1024.json")
 
@@ -109,7 +109,7 @@ class VizWizFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 4319
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/vizwiz/metadata.json")
     annotations_file: Path = Path("datasets/vizwiz/annotations-vizwiz-full.json")
     questions_file: Path = Path("datasets/vizwiz/questions-vizwiz-full.json")
@@ -123,7 +123,7 @@ class VizWizSlimDatasetConfig(DatasetConfig):
 
     expected_examples: int = 1024
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/vizwiz/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/vizwiz/annotations-vizwiz-slim-1024.json")
     questions_file: Path = Path("datasets/vizwiz/questions-vizwiz-slim-1024.json")
@@ -138,7 +138,7 @@ class TextVQAFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 5000
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/text-vqa/metadata.json")
     annotations_file: Path = Path("datasets/text-vqa/annotations-textvqa-full.json")
 
@@ -151,7 +151,7 @@ class TextVQAFullOCRDatasetConfig(DatasetConfig):
 
     expected_examples: int = 5000
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/text-vqa/metadata.json")
     annotations_file: Path = Path("datasets/text-vqa/annotations-textvqa-full.json")
 
@@ -166,7 +166,7 @@ class TextVQASlimDatasetConfig(DatasetConfig):
 
     expected_examples: int = 1024
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/text-vqa/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/text-vqa/annotations-textvqa-slim-1024.json")
 
@@ -180,7 +180,7 @@ class NoCapsFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 4500
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/nocaps/metadata-full.json")
     annotations_file: Path = Path("datasets/nocaps/metadata-full.json")
 
@@ -193,7 +193,7 @@ class NoCapsSlimDatasetConfig(DatasetConfig):
 
     expected_examples: int = 1024
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/nocaps/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/nocaps/metadata-slim-1024.json")
 
@@ -207,7 +207,7 @@ class VSRFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 1222
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/vsr/metadata-full.json")
     annotations_file: Path = Path("datasets/vsr/metadata-full.json")
 
@@ -221,7 +221,7 @@ class RefCOCOFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 26488
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/refcoco/metadata-full.json")
     annotations_file: Path = Path("datasets/refcoco/metadata-full.json")
 
@@ -235,7 +235,7 @@ class RefCOCOSlimDatasetConfig(DatasetConfig):
     # Examples =>> n = 1024 for each of RefCOCO/RefCOCO+/RefCOCOg = 3 * 1024 = 3072
     expected_examples: int = 3072
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/refcoco/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/refcoco/metadata-slim-1024.json")
 
@@ -249,7 +249,7 @@ class OCIDRefFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 18342
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/ocid-ref/metadata-full.json")
     annotations_file: Path = Path("datasets/ocid-ref/metadata-full.json")
 
@@ -263,7 +263,7 @@ class OCIDRefSlimDatasetConfig(DatasetConfig):
     # Examples =>> n = 1024 for each of the Min/Med/Max Clutter Splits = 3 * 1024 = 3072
     expected_examples: int = 3072
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/ocid-ref/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/ocid-ref/metadata-slim-1024.json")
 
@@ -276,7 +276,7 @@ class TallyQAFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 38589
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/tally-qa/metadata-full.json")
     annotations_file: Path = Path("datasets/tally-qa/metadata-full.json")
 
@@ -290,7 +290,7 @@ class TallyQASubsampledDatasetConfig(DatasetConfig):
     # Examples =>> n = 8192 for each of "Simple" and "Complex" = 2 * 8192 = 16384
     expected_examples: int = 16384
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/tally-qa/metadata-slim-8192.json")
     annotations_file: Path = Path("datasets/tally-qa/metadata-slim-8192.json")
 
@@ -304,7 +304,7 @@ class TallyQASlimDatasetConfig(DatasetConfig):
     # Examples =>> n = 1024 for each of "Simple" and "Complex" = 2 * 1024 = 2048
     expected_examples: int = 2048
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/tally-qa/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/tally-qa/metadata-slim-1024.json")
 
@@ -316,7 +316,7 @@ class PopeFullDatasetConfig(DatasetConfig):
     dataset_id: str = "pope-full"
     split: str = "eval"
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/pope/metadata-full.json")
     annotations_file: Path = Path("datasets/pope/metadata-full.json")
 
@@ -330,7 +330,7 @@ class PopeSlimDatasetConfig(DatasetConfig):
     dataset_id: str = "pope-slim"
     split: str = "eval"
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/pope/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/pope/metadata-slim-1024.json")
 
@@ -347,7 +347,7 @@ class AI2DFullDatasetConfig(DatasetConfig):
 
     expected_examples: int = 15501
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/ai2d/metadata-full.json")
     annotations_file: Path = Path("datasets/ai2d/metadata-full.json")
 
@@ -360,7 +360,7 @@ class AI2DSlimDatasetConfig(DatasetConfig):
 
     expected_examples: int = 2048
 
-    root_dir: Path = Path("../../datasets/vlm-evaluation")
+    root_dir: Path = Path(".")
     index_file: Path = Path("datasets/ai2d/metadata-slim-1024.json")
     annotations_file: Path = Path("datasets/ai2d/metadata-slim-1024.json")
 

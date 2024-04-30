@@ -18,6 +18,7 @@ from llava.constants import DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
 from llava.conversation import conv_templates
 from llava.mm_utils import tokenizer_image_token
 from llava.model import LlavaLlamaForCausalLM
+import PIL
 from PIL.Image import Image
 from transformers import AutoTokenizer, CLIPImageProcessor
 
@@ -83,7 +84,6 @@ class LLaVa(VLM):
 
         # Load Model on GPU(s) --> download if necessary via HF Hub
         self.model, self.tokenizer, self.image_processor = self.load()
-
         # LLaVa is a chat-based model --> Load Chat-Specific VQA Prompts following LLaVa SciQA
         #   Ref: https://github.com/haotian-liu/LLaVA/blob/main/llava/eval/model_vqa_science.py#L29
         self.conv_mode = {
@@ -356,10 +356,19 @@ class LLaVa(VLM):
 
     @torch.inference_mode()
     def generate_answer(
-        self, pixel_values: torch.Tensor, questions: List[str], return_string_probabilities: Optional[List[str]] = None
+        self, image_paths: List[str], questions: List[str], return_string_probabilities: Optional[List[str]] = None
     ) -> Union[List[str], List[List[float]]]:
         # By default, LLaVa code only neatly handles processing a single example at a time, due to the way the <image>
         # tokens are interleaved with the text; this code just loops over inputs (naive padding doesn't work...)
+
+        pixel_values = torch.stack(
+            [
+                self.image_processor(PIL.Image.open(image_path).convert("RGB"), return_tensors="pt")["pixel_values"][0] 
+                for image_path in image_paths
+            ],
+            dim=0)
+        pixel_values = pixel_values.to(self.distributed_state.device)
+        
         with torch.cuda.amp.autocast(dtype=self.dtype):
             batch_input_ids = [
                 tokenizer_image_token(q, self.tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt").to(pixel_values.device)
