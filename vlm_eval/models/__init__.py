@@ -4,20 +4,22 @@ from typing import Optional
 from vlm_eval.util.interfaces import VLM
 
 from .instructblip import InstructBLIP
-# from .llava import LLaVa
+from .llava import LLaVa
 from .prismatic import PrismaticVLM
 from .deepseek_vl import DeepSeekVL
 from .yi_vl import YiVL
 from .intern_vl import InternVL
+from .qwen_vl_chat import QWenVL
 
 # === Initializer Dispatch by Family ===
 FAMILY2INITIALIZER = {
     "instruct-blip": InstructBLIP, 
-    # "llava-v15": LLaVa, 
+    "llava-v15": LLaVa, 
     "prismatic": PrismaticVLM, 
     "deepseek_vl":DeepSeekVL,
     "yi_vl":YiVL,
     "intern_vl":InternVL,
+    "qwen_vl":QWenVL,
     }
 
 
