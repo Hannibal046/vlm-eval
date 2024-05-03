@@ -233,7 +233,8 @@ class PrismaticVLM(VLM):
             )
         pixel_values = {k: v.to(self.distributed_state.device) for k, v in pixel_values.items()}
         return self.model.generate_batch(
-            pixel_values, question_prompts, return_string_probabilities, **self.generate_kwargs
+            pixel_values, question_prompts, return_string_probabilities, **self.generate_kwargs, 
+            pad_token_id=self.model.llm_backbone.tokenizer.pad_token_id,
         )
 
     @torch.inference_mode()

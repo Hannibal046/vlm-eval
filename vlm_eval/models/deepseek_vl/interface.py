@@ -12,9 +12,9 @@ from accelerate import PartialState
 from vlm_eval.util.interfaces import VLM, ImageProcessor, Tokenizer
 
 ## Model-specific Import
-from deepseek_vl.models import VLChatProcessor
-from deepseek_vl.models.processing_vlm import VLChatProcessorOutput
-from deepseek_vl.utils.io import load_pil_images
+from .deepseek_vl.models import VLChatProcessor
+from .deepseek_vl.models.processing_vlm import VLChatProcessorOutput
+from .deepseek_vl.utils.io import load_pil_images
 from transformers import AutoModelForCausalLM
 
 DEEPSEEKVL_MODELS = [
@@ -80,7 +80,65 @@ class DeepSeekVL(VLM):
 
     def set_generate_kwargs(self, generate_kwargs):
         self.generate_kwargs = generate_kwargs
+    
+    @torch.inference_mode()
+    def generate_answer(
+        self, image_path: List[Path], questions: List[str], return_string_probabilities: Optional[List[str]] = None
+    ) -> Union[List[str], List[List[float]]]:
+        gen_texts = []
+        gen_probabilities = []
+        with torch.cuda.amp.autocast(dtype=self.dtype):
+            for image,question in zip(image_path,questions):
+                conversation = [
+                    {
+                        "role": "User",
+                        "content": question,
+                        "images": [image],
+                    },
+                    {"role": "Assistant", "content": ""},
+                ]
+                pil_images = load_pil_images(conversation)
+                prepare_inputs = self.text_img_processor(
+                    conversations=conversation,
+                    images=pil_images,
+                    force_batchify=True
+                ).to(self.distributed_state.device)
+                inputs_embeds = self.model.prepare_inputs_embeds(**prepare_inputs)
+                if return_string_probabilities is None:
+                    outputs = self.model.language_model.generate(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=prepare_inputs.attention_mask,
+                        pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
+                        eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        use_cache=True,
+                        **self.generate_kwargs,
+                    )
+                    answer = self.text_img_processor.tokenizer.decode(outputs[0].cpu().tolist(), skip_special_tokens=True)
+                    gen_texts.append(answer)
+                else:
+                    full_out_dict = self.model.language_model.generate(
+                        inputs_embeds=inputs_embeds,
+                        attention_mask=prepare_inputs.attention_mask,
+                        pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
+                        eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
+                        use_cache=True,
+                        **self.generate_kwargs,
+                        output_scores=True,
+                        return_dict_in_generate=True,
+                    )
+                    gen_ids = full_out_dict.sequences[0, 0 :]
+                    gen_texts.append(self.text_img_processor.tokenizer.decode(gen_ids, skip_special_tokens=True).strip())
+                    token_probs = torch.softmax(full_out_dict.scores[0][0], dim=0)
+                    slice_idxs = torch.tensor([self.string2idx[s] for s in return_string_probabilities])
+                    string_probs_unnormalized = token_probs[slice_idxs]
+                    string_probs = string_probs_unnormalized / string_probs_unnormalized.sum()
+                    gen_probabilities.append(string_probs.cpu().numpy().tolist())
 
+
+        return gen_texts if return_string_probabilities is None else gen_probabilities
+    
     def get_prompt_fn(self, dataset_family: str = "vqa-v2") -> Callable[[str], str]:
         vqa_prompt_fn = self.get_vqa_chat_prompt_fn(uncertainty_aware=False)
         vqa_uncertain_prompt_fn = self.get_vqa_chat_prompt_fn(uncertainty_aware=True)
@@ -175,60 +233,4 @@ class DeepSeekVL(VLM):
 
         return bbox_refer_prompt_fn
 
-    @torch.inference_mode()
-    def generate_answer(
-        self, image_path: List[Path], questions: List[str], return_string_probabilities: Optional[List[str]] = None
-    ) -> Union[List[str], List[List[float]]]:
-        gen_texts = []
-        gen_probabilities = []
-        with torch.cuda.amp.autocast(dtype=self.dtype):
-            for image,question in zip(image_path,questions):
-                conversation = [
-                    {
-                        "role": "User",
-                        "content": question,
-                        "images": [image],
-                    },
-                    {"role": "Assistant", "content": ""},
-                ]
-                pil_images = load_pil_images(conversation)
-                prepare_inputs = self.text_img_processor(
-                    conversations=conversation,
-                    images=pil_images,
-                    force_batchify=True
-                ).to(self.distributed_state.device)
-                inputs_embeds = self.model.prepare_inputs_embeds(**prepare_inputs)
-                if return_string_probabilities is None:
-                    outputs = self.model.language_model.generate(
-                        inputs_embeds=inputs_embeds,
-                        attention_mask=prepare_inputs.attention_mask,
-                        pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
-                        bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
-                        eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
-                        use_cache=True,
-                        **self.generate_kwargs,
-                    )
-                    answer = self.text_img_processor.tokenizer.decode(outputs[0].cpu().tolist(), skip_special_tokens=True)
-                    gen_texts.append(answer)
-                else:
-                    full_out_dict = self.model.language_model.generate(
-                        inputs_embeds=inputs_embeds,
-                        attention_mask=prepare_inputs.attention_mask,
-                        pad_token_id=self.text_img_processor.tokenizer.eos_token_id,
-                        bos_token_id=self.text_img_processor.tokenizer.bos_token_id,
-                        eos_token_id=self.text_img_processor.tokenizer.eos_token_id,
-                        use_cache=True,
-                        **self.generate_kwargs,
-                        output_scores=True,
-                        return_dict_in_generate=True,
-                    )
-                    gen_ids = full_out_dict.sequences[0, 0 :]
-                    gen_texts.append(self.text_img_processor.tokenizer.decode(gen_ids, skip_special_tokens=True).strip())
-                    token_probs = torch.softmax(full_out_dict.scores[0][0], dim=0)
-                    slice_idxs = torch.tensor([self.string2idx[s] for s in return_string_probabilities])
-                    string_probs_unnormalized = token_probs[slice_idxs]
-                    string_probs = string_probs_unnormalized / string_probs_unnormalized.sum()
-                    gen_probabilities.append(string_probs.cpu().numpy().tolist())
 
-
-        return gen_texts if return_string_probabilities is None else gen_probabilities

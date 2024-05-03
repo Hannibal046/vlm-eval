@@ -1,8 +1,10 @@
+dataset=text-vqa-slim
+model_dir=/mnt/xincheng/prismatic-vlms/runs/llama3+stage-finetune+x7
 accelerate launch --num_processes 8  \
     scripts/evaluate.py \
-    --model_id prism-dinosiglip+7b \
-    --dataset.type text-vqa-slim
+    --model_dir ${model_dir} \
+    --dataset.type ${dataset}
 
 python scripts/score.py \
-    --model_id prism-dinosiglip+7b \
-    --dataset.type text-vqa-slim
+    --model_id prism-clip+7b \
+    --dataset.type ${dataset}
